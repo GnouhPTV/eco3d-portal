@@ -2,9 +2,13 @@ import axios from 'axios'
 
 const appBasePath = import.meta.env.BASE_URL || '/'
 const loginPath = `${appBasePath.replace(/\/$/, '')}/login`
+const defaultApiBaseUrl =
+  window.location.hostname === 'gnouhptv.github.io'
+    ? 'https://eco3d-portal-backend.onrender.com/api'
+    : 'http://localhost:8080/api'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
