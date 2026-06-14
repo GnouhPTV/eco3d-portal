@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../api/client.js'
 import { useAuth } from '../state/AuthContext.jsx'
 
@@ -26,10 +26,15 @@ export default function AdminUsersPage() {
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [employeeLinkFilter, setEmployeeLinkFilter] = useState('all')
   const [employeeStatusFilter, setEmployeeStatusFilter] = useState('all')
+  const [employeePage, setEmployeePage] = useState(0)
+  const [employeePageSize, setEmployeePageSize] = useState(20)
+  const [accountSearch, setAccountSearch] = useState('')
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [linking, setLinking] = useState(false)
+  const accountPickerRef = useRef(null)
 
   const canManage = isAccountCreator(user)
   const linkedEmployeeCodes = useMemo(
@@ -48,6 +53,12 @@ export default function AdminUsersPage() {
     () => employees.find((item) => item.ma === linkForm.employeeCode),
     [employees, linkForm.employeeCode],
   )
+  const filteredLinkAccounts = useMemo(() => {
+    const keyword = normalizeText(accountSearch)
+    return users
+      .filter((account) => !keyword || normalizeText(accountLabel(account)).includes(keyword))
+      .slice(0, 60)
+  }, [users, accountSearch])
   const filteredEmployeeDetails = useMemo(() => {
     const keyword = normalizeText(employeeSearch)
     return employeeDetails.filter((employee) => {
@@ -64,10 +75,41 @@ export default function AdminUsersPage() {
       return true
     })
   }, [employeeDetails, employeeSearch, employeeLinkFilter, employeeStatusFilter, linkedEmployeeCodes])
+  const employeeTotalPages = Math.max(1, Math.ceil(filteredEmployeeDetails.length / employeePageSize))
+  const safeEmployeePage = Math.min(employeePage, employeeTotalPages - 1)
+  const pagedEmployeeDetails = filteredEmployeeDetails.slice(
+    safeEmployeePage * employeePageSize,
+    safeEmployeePage * employeePageSize + employeePageSize,
+  )
 
   useEffect(() => {
     if (canManage) loadData()
   }, [canManage])
+
+  useEffect(() => {
+    setEmployeePage(0)
+  }, [employeeSearch, employeeLinkFilter, employeeStatusFilter, employeePageSize])
+
+  useEffect(() => {
+    if (selectedLinkAccount) {
+      setAccountSearch(accountLabel(selectedLinkAccount))
+    } else if (!linkForm.userId) {
+      setAccountSearch('')
+    }
+  }, [selectedLinkAccount, linkForm.userId])
+
+  useEffect(() => {
+    if (!accountPickerOpen) return undefined
+
+    function closePickerOnOutsideClick(event) {
+      if (accountPickerRef.current && !accountPickerRef.current.contains(event.target)) {
+        setAccountPickerOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', closePickerOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closePickerOnOutsideClick)
+  }, [accountPickerOpen])
 
   async function loadData() {
     setError('')
@@ -93,12 +135,28 @@ export default function AdminUsersPage() {
     setLinkForm((current) => ({ ...current, [field]: value }))
   }
 
+  function chooseLinkAccount(account) {
+    setLinkForm((current) => ({ ...current, userId: String(account.key1) }))
+    setAccountSearch(accountLabel(account))
+    setAccountPickerOpen(false)
+  }
+
+  function searchLinkAccount(value) {
+    setAccountSearch(value)
+    setLinkForm((current) => ({ ...current, userId: '' }))
+    setAccountPickerOpen(true)
+  }
+
   function showProfile(employee) {
     setProfileEmployee(employee)
   }
 
   function useEmployeeForLink(employee) {
     setLinkForm((current) => ({ ...current, employeeCode: getEmployeeCode(employee) }))
+  }
+
+  function updateEmployeePageSize(value) {
+    setEmployeePageSize(Number(value))
   }
 
   function handleEmployeeSaved(updatedEmployee) {
@@ -239,14 +297,39 @@ export default function AdminUsersPage() {
           <p>Chọn tài khoản đã tạo, sau đó chọn hồ sơ nhân viên để cập nhật liên kết. Không cần nhập lại mật khẩu.</p>
 
           <label>Tài khoản cần gắn</label>
-          <select value={linkForm.userId} onChange={(e) => updateLinkField('userId', e.target.value)}>
-            <option value="">Chọn tài khoản</option>
-            {users.map((account) => (
-              <option key={account.key1} value={account.key1}>
-                {account.ten}{account.tenNhanVien ? ` - ${account.tenNhanVien}` : ' - chưa gắn nhân viên'}
-              </option>
-            ))}
-          </select>
+          <div className="search-select" ref={accountPickerRef}>
+            <input
+              value={accountSearch}
+              onFocus={() => setAccountPickerOpen(true)}
+              onChange={(e) => searchLinkAccount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setAccountPickerOpen(false)
+              }}
+              placeholder="Tìm theo tên tài khoản hoặc nhân viên..."
+              autoComplete="off"
+            />
+            {accountSearch && (
+              <button type="button" className="search-select-clear" onClick={() => searchLinkAccount('')} aria-label="Xóa tài khoản đang chọn">×</button>
+            )}
+            {accountPickerOpen && (
+              <div className="search-select-menu">
+                {filteredLinkAccounts.length ? filteredLinkAccounts.map((account) => (
+                  <button
+                    type="button"
+                    className={String(account.key1) === String(linkForm.userId) ? 'search-select-option active' : 'search-select-option'}
+                    key={account.key1}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => chooseLinkAccount(account)}
+                  >
+                    <strong>{account.ten}</strong>
+                    <span>{account.tenNhanVien || account.nhanVien || 'Chưa gắn nhân viên'}</span>
+                  </button>
+                )) : (
+                  <div className="search-select-empty">Không tìm thấy tài khoản phù hợp</div>
+                )}
+              </div>
+            )}
+          </div>
 
           <label>Nhân viên cần gắn</label>
           <select value={linkForm.employeeCode} onChange={(e) => updateLinkField('employeeCode', e.target.value)}>
@@ -302,6 +385,14 @@ export default function AdminUsersPage() {
                 <option value="inactive">Ngừng dùng</option>
               </select>
             </label>
+            <label>
+              Hiển thị
+              <select value={employeePageSize} onChange={(e) => updateEmployeePageSize(e.target.value)}>
+                <option value="20">20 nhân viên</option>
+                <option value="50">50 nhân viên</option>
+                <option value="100">100 nhân viên</option>
+              </select>
+            </label>
           </div>
 
           <div className="desktop-table">
@@ -317,7 +408,7 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredEmployeeDetails.map((employee) => {
+                {pagedEmployeeDetails.map((employee) => {
                   const code = getEmployeeCode(employee)
                   const linkedAccount = linkedEmployeeCodes.get(code)
                   const status = getEmployeeStatus(employee)
@@ -337,6 +428,18 @@ export default function AdminUsersPage() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="pagination employee-pagination">
+            <button type="button" onClick={() => setEmployeePage(0)} disabled={safeEmployeePage === 0}>Đầu trang</button>
+            <button type="button" onClick={() => setEmployeePage((page) => Math.max(0, page - 1))} disabled={safeEmployeePage === 0}>Trang trước</button>
+            <span>
+              Trang <strong>{safeEmployeePage + 1}</strong> / {employeeTotalPages}
+              {' '}· Hiển thị {filteredEmployeeDetails.length === 0 ? 0 : safeEmployeePage * employeePageSize + 1}
+              -{Math.min((safeEmployeePage + 1) * employeePageSize, filteredEmployeeDetails.length)}
+              {' '}trên {filteredEmployeeDetails.length} nhân viên
+            </span>
+            <button type="button" onClick={() => setEmployeePage((page) => Math.min(employeeTotalPages - 1, page + 1))} disabled={safeEmployeePage >= employeeTotalPages - 1}>Trang sau</button>
+            <button type="button" onClick={() => setEmployeePage(employeeTotalPages - 1)} disabled={safeEmployeePage >= employeeTotalPages - 1}>Cuối trang</button>
           </div>
         </div>
       </div>
@@ -629,6 +732,12 @@ function getValue(object, keys) {
 function employeeLabel(employee) {
   const role = employee.role && employee.role !== '-' ? ` - ${employee.role}` : ''
   return `${employee.ten || employee.ma}${role}`
+}
+
+function accountLabel(account) {
+  if (!account) return ''
+  const linkedEmployee = account.tenNhanVien || account.nhanVien || 'Chưa gắn nhân viên'
+  return `${account.ten || account.key1 || ''} - ${linkedEmployee}`
 }
 
 function isLinkedByAnotherAccount(employeeCode, userId, linkedEmployeeCodes) {

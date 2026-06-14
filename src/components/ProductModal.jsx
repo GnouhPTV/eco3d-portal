@@ -40,7 +40,7 @@ export default function ProductModal({ product, onClose }) {
 
   useEffect(() => {
     let cancelled = false
-    const sourceUrl = displayProduct?.urlLink?.trim() || ''
+    const sourceUrl = firstValidLink(displayProduct?.extraInfo?.WebsiteLink, displayProduct?.urlLink)
 
     setImageUrl('')
     setImageError(false)
@@ -63,11 +63,13 @@ export default function ProductModal({ product, onClose }) {
     return () => {
       cancelled = true
     }
-  }, [displayProduct?.urlLink])
+  }, [displayProduct?.extraInfo?.WebsiteLink, displayProduct?.urlLink])
 
   if (!displayProduct) return null
 
   const extraInfo = displayProduct.extraInfo || {}
+  const websiteLink = firstValidLink(extraInfo.WebsiteLink, displayProduct.urlLink)
+  const actualImageLink = firstValidLink(extraInfo.AnhThucTeLink)
 
   return (
     <div className="modal-backdrop">
@@ -90,17 +92,16 @@ export default function ProductModal({ product, onClose }) {
               <span className="tag brand-tag">{displayProduct.tenHangSX || '-'}</span>
               <span className="tag unit-tag">ĐVT: {displayProduct.dvt || '-'}</span>
             </div>
-            <p>{displayProduct.moTa || 'Chưa có mô tả.'}</p>
+            <ProductDescription value={displayProduct.moTa} />
             <div className="profile-key-facts">
               <Info label="Nước sản xuất" value={formatLookup(extraInfo.TenNuocSX)} />
               <Info label="Loại hàng" value={formatLookup(extraInfo.TenLoaiHang)} />
               <Info label="Nhân viên" value={formatLookup(extraInfo.TenNhanVien)} />
             </div>
-            {displayProduct.urlLink && (
-              <a className="product-link" href={displayProduct.urlLink} target="_blank" rel="noreferrer">
-                Mở trang sản phẩm
-              </a>
-            )}
+            <div className="product-link-list">
+              <ProductLinkRow label="Link website :" href={websiteLink} text="Mở trang sản phẩm" />
+              <ProductLinkRow label="Ảnh thực tế :" href={actualImageLink} text="Mở ảnh thực tế" />
+            </div>
           </div>
 
           <div className="profile-tabs" role="tablist" aria-label="Nhóm thông tin hồ sơ sản phẩm">
@@ -260,6 +261,34 @@ export default function ProductModal({ product, onClose }) {
   )
 }
 
+function ProductDescription({ value }) {
+  const lines = descriptionLines(value)
+  if (!lines.length) {
+    return <p className="product-description">Chưa có mô tả.</p>
+  }
+  if (lines.length === 1) {
+    return <p className="product-description">{lines[0]}</p>
+  }
+  return (
+    <ul className="product-description-list">
+      {lines.map((line) => <li key={line}>{line}</li>)}
+    </ul>
+  )
+}
+
+function ProductLinkRow({ label, href, text }) {
+  return (
+    <div className="product-link-row">
+      <span>{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer">{text}</a>
+      ) : (
+        <strong aria-label="Chưa có liên kết" />
+      )}
+    </div>
+  )
+}
+
 function Info({ label, value }) {
   return <div><span>{label}</span><strong>{formatDisplayValue(value)}</strong></div>
 }
@@ -319,4 +348,24 @@ function formatDateValue(value) {
 
 function isImageUrl(url) {
   return /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url)
+}
+
+function descriptionLines(value) {
+  const text = String(value || '').replace(/\r\n/g, '\n').trim()
+  if (!text) return []
+  if (text.includes('\n')) {
+    return text
+      .split('\n')
+      .map((line) => line.trim().replace(/^[-•]\s*/, ''))
+      .filter(Boolean)
+  }
+  const withoutLeadingDash = text.replace(/^-\s*/, '')
+  const parts = withoutLeadingDash.split(/\s+-\s+/).map((line) => line.trim()).filter(Boolean)
+  return parts.length > 1 ? parts : [text]
+}
+
+function firstValidLink(...values) {
+  return values
+    .map((value) => String(value || '').trim())
+    .find((value) => /^https?:\/\//i.test(value)) || ''
 }

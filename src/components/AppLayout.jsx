@@ -6,6 +6,7 @@ export default function AppLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const canManageUsers = isAccountCreator(user)
+  const assetBase = import.meta.env.BASE_URL
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('eco3d-sidebar') === 'collapsed')
 
   useEffect(() => {
@@ -31,8 +32,8 @@ export default function AppLayout() {
         </button>
 
         <div className="brand">
-          <img className="brand-logo-full" src="/eco3d-logo.png" alt="ECO3D" />
-          <img className="brand-logo-icon" src="/eco3d-icon.png" alt="ECO3D" />
+          <img className="brand-logo-full" src={`${assetBase}eco3d-logo.png`} alt="ECO3D" />
+          <img className="brand-logo-icon" src={`${assetBase}eco3d-icon.png`} alt="ECO3D" />
           <span>Cổng nội bộ</span>
         </div>
 
