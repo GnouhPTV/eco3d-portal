@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import ProductsPage from './pages/ProductsPage.jsx'
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx'
+import AdminUsersPage from './pages/AdminUsersPage.jsx'
 import AppLayout from './components/AppLayout.jsx'
 
 function ProtectedRoute({ children }) {
@@ -27,6 +28,7 @@ export default function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="users" element={<AdminUsersPage />} />
         <Route path="change-password" element={<ChangePasswordPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

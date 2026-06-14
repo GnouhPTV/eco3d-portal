@@ -31,7 +31,7 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo">ECO3D</div>
+        <img className="login-logo-image" src="/eco3d-logo.png" alt="ECO3D" />
         <h1>Đăng nhập hệ thống</h1>
         <p>Cổng quản lý nội bộ dành cho kinh doanh và kho hàng</p>
         <form onSubmit={handleSubmit}>
