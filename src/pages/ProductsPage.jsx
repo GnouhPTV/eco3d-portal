@@ -64,8 +64,8 @@ export default function ProductsPage() {
     <section className="page-section products-page">
       <div className="section-title row-title">
         <div>
-          <h2>Danh mục hàng hóa</h2>
-          <p>Tìm kiếm, lọc và xem hồ sơ sản phẩm từ SQL Server ECO3D</p>
+          <h2>Hàng hóa</h2>
+          <p>Danh sách hàng hóa, tìm kiếm, lọc và phân trang.</p>
         </div>
         <button type="button" className="ghost-btn" onClick={resetFilters}>Xóa lọc</button>
       </div>

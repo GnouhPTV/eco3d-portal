@@ -15,10 +15,17 @@ const initialLinkForm = {
   employeeCode: '',
 }
 
+const initialResetForm = {
+  userId: '',
+  password: '',
+  confirmPassword: '',
+}
+
 export default function AdminUsersPage() {
   const { user } = useAuth()
   const [createForm, setCreateForm] = useState(initialCreateForm)
   const [linkForm, setLinkForm] = useState(initialLinkForm)
+  const [resetForm, setResetForm] = useState(initialResetForm)
   const [employees, setEmployees] = useState([])
   const [employeeDetails, setEmployeeDetails] = useState([])
   const [users, setUsers] = useState([])
@@ -30,11 +37,17 @@ export default function AdminUsersPage() {
   const [employeePageSize, setEmployeePageSize] = useState(20)
   const [accountSearch, setAccountSearch] = useState('')
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
+  const [resetAccountSearch, setResetAccountSearch] = useState('')
+  const [resetAccountPickerOpen, setResetAccountPickerOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [resetMessage, setResetMessage] = useState('')
+  const [resetError, setResetError] = useState('')
   const [creating, setCreating] = useState(false)
   const [linking, setLinking] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const accountPickerRef = useRef(null)
+  const resetAccountPickerRef = useRef(null)
 
   const canManage = isAccountCreator(user)
   const linkedEmployeeCodes = useMemo(
@@ -53,12 +66,22 @@ export default function AdminUsersPage() {
     () => employees.find((item) => item.ma === linkForm.employeeCode),
     [employees, linkForm.employeeCode],
   )
+  const selectedResetAccount = useMemo(
+    () => users.find((item) => String(item.key1) === String(resetForm.userId)),
+    [users, resetForm.userId],
+  )
   const filteredLinkAccounts = useMemo(() => {
     const keyword = normalizeText(accountSearch)
     return users
       .filter((account) => !keyword || normalizeText(accountLabel(account)).includes(keyword))
       .slice(0, 60)
   }, [users, accountSearch])
+  const filteredResetAccounts = useMemo(() => {
+    const keyword = normalizeText(resetAccountSearch)
+    return users
+      .filter((account) => !keyword || normalizeText(`${accountLabel(account)} ${passwordStateText(account)}`).includes(keyword))
+      .slice(0, 60)
+  }, [users, resetAccountSearch])
   const filteredEmployeeDetails = useMemo(() => {
     const keyword = normalizeText(employeeSearch)
     return employeeDetails.filter((employee) => {
@@ -99,17 +122,28 @@ export default function AdminUsersPage() {
   }, [selectedLinkAccount, linkForm.userId])
 
   useEffect(() => {
-    if (!accountPickerOpen) return undefined
+    if (selectedResetAccount) {
+      setResetAccountSearch(accountLabel(selectedResetAccount))
+    } else if (!resetForm.userId) {
+      setResetAccountSearch('')
+    }
+  }, [selectedResetAccount, resetForm.userId])
+
+  useEffect(() => {
+    if (!accountPickerOpen && !resetAccountPickerOpen) return undefined
 
     function closePickerOnOutsideClick(event) {
       if (accountPickerRef.current && !accountPickerRef.current.contains(event.target)) {
         setAccountPickerOpen(false)
       }
+      if (resetAccountPickerRef.current && !resetAccountPickerRef.current.contains(event.target)) {
+        setResetAccountPickerOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', closePickerOnOutsideClick)
     return () => document.removeEventListener('mousedown', closePickerOnOutsideClick)
-  }, [accountPickerOpen])
+  }, [accountPickerOpen, resetAccountPickerOpen])
 
   async function loadData() {
     setError('')
@@ -135,6 +169,12 @@ export default function AdminUsersPage() {
     setLinkForm((current) => ({ ...current, [field]: value }))
   }
 
+  function updateResetField(field, value) {
+    setResetForm((current) => ({ ...current, [field]: value }))
+    setResetMessage('')
+    setResetError('')
+  }
+
   function chooseLinkAccount(account) {
     setLinkForm((current) => ({ ...current, userId: String(account.key1) }))
     setAccountSearch(accountLabel(account))
@@ -145,6 +185,22 @@ export default function AdminUsersPage() {
     setAccountSearch(value)
     setLinkForm((current) => ({ ...current, userId: '' }))
     setAccountPickerOpen(true)
+  }
+
+  function chooseResetAccount(account) {
+    setResetForm((current) => ({ ...current, userId: String(account.key1) }))
+    setResetAccountSearch(accountLabel(account))
+    setResetAccountPickerOpen(false)
+    setResetMessage('')
+    setResetError('')
+  }
+
+  function searchResetAccount(value) {
+    setResetAccountSearch(value)
+    setResetForm((current) => ({ ...current, userId: '' }))
+    setResetAccountPickerOpen(true)
+    setResetMessage('')
+    setResetError('')
   }
 
   function showProfile(employee) {
@@ -238,6 +294,44 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function submitResetPassword(e) {
+    e.preventDefault()
+    setMessage('')
+    setError('')
+    setResetMessage('')
+    setResetError('')
+    if (!resetForm.userId) {
+      setResetError('Vui lòng chọn tài khoản cần đặt lại mật khẩu')
+      return
+    }
+    if (resetForm.password !== resetForm.confirmPassword) {
+      setResetError('Mật khẩu xác nhận không khớp')
+      return
+    }
+    if (!isStrongPassword(resetForm.password)) {
+      setResetError('Mật khẩu cần tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt')
+      return
+    }
+
+    setResetting(true)
+    try {
+      const res = await api.put('/auth/users/reset-password', {
+        userId: Number(resetForm.userId),
+        newPassword: resetForm.password,
+      })
+      const updatedAccount = res.data?.data
+      setResetMessage(res.data?.message || 'Đặt lại mật khẩu tài khoản thành công')
+      setUsers((current) => current.map((account) => (
+        account.key1 === updatedAccount.key1 ? updatedAccount : account
+      )))
+      setResetForm(initialResetForm)
+    } catch (err) {
+      setResetError(err.response?.data?.message || 'Không đặt lại được mật khẩu tài khoản')
+    } finally {
+      setResetting(false)
+    }
+  }
+
   if (!canManage) {
     return (
       <section className="page-section">
@@ -322,7 +416,7 @@ export default function AdminUsersPage() {
                     onClick={() => chooseLinkAccount(account)}
                   >
                     <strong>{account.ten}</strong>
-                    <span>{account.tenNhanVien || account.nhanVien || 'Chưa gắn nhân viên'}</span>
+                    <span>{account.tenNhanVien || account.nhanVien || 'Chưa gắn nhân viên'} · {passwordStateText(account)}</span>
                   </button>
                 )) : (
                   <div className="search-select-empty">Không tìm thấy tài khoản phù hợp</div>
@@ -356,6 +450,65 @@ export default function AdminUsersPage() {
           {selectedLinkEmployee && <EmployeePreview employee={selectedLinkEmployee} title="Nhân viên sẽ được gắn" />}
 
           <button type="submit" className="primary-btn" disabled={linking}>{linking ? 'Đang cập nhật...' : 'Cập nhật liên kết'}</button>
+        </form>
+
+        <form className="employee-link-card account-reset-card" onSubmit={submitResetPassword}>
+          <h3>Đặt lại mật khẩu tài khoản</h3>
+          <p>Dùng cho tài khoản cũ chưa có PWDMD5 hoặc nhân viên quên mật khẩu. Hệ thống sẽ ghi mật khẩu mới vào cột PWDMD5.</p>
+
+          <label>Tài khoản cần đặt lại</label>
+          <div className="search-select" ref={resetAccountPickerRef}>
+            <input
+              value={resetAccountSearch}
+              onFocus={() => setResetAccountPickerOpen(true)}
+              onChange={(e) => searchResetAccount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setResetAccountPickerOpen(false)
+              }}
+              placeholder="Tìm theo tên tài khoản hoặc nhân viên..."
+              autoComplete="off"
+            />
+            {resetAccountSearch && (
+              <button type="button" className="search-select-clear" onClick={() => searchResetAccount('')} aria-label="Xóa tài khoản đang chọn">×</button>
+            )}
+            {resetAccountPickerOpen && (
+              <div className="search-select-menu">
+                {filteredResetAccounts.length ? filteredResetAccounts.map((account) => (
+                  <button
+                    type="button"
+                    className={String(account.key1) === String(resetForm.userId) ? 'search-select-option active' : 'search-select-option'}
+                    key={account.key1}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => chooseResetAccount(account)}
+                  >
+                    <strong>{account.ten}</strong>
+                    <span>{account.tenNhanVien || account.nhanVien || 'Chưa gắn nhân viên'} · {passwordStateText(account)}</span>
+                  </button>
+                )) : (
+                  <div className="search-select-empty">Không tìm thấy tài khoản phù hợp</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {selectedResetAccount && (
+            <div className={selectedResetAccount.hasPassword ? 'password-state has-password' : 'password-state missing-password'}>
+              <span>{selectedResetAccount.ten}</span>
+              <strong>{passwordStateText(selectedResetAccount)}</strong>
+            </div>
+          )}
+
+          <label>Mật khẩu mới</label>
+          <input type="password" value={resetForm.password} onChange={(e) => updateResetField('password', e.target.value)} required />
+          <small className="password-hint">Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.</small>
+
+          <label>Nhập lại mật khẩu mới</label>
+          <input type="password" value={resetForm.confirmPassword} onChange={(e) => updateResetField('confirmPassword', e.target.value)} required />
+
+          {resetMessage && <div className="alert success">{resetMessage}</div>}
+          {resetError && <div className="alert error">{resetError}</div>}
+
+          <button type="submit" className="primary-btn" disabled={resetting}>{resetting ? 'Đang đặt lại...' : 'Đặt lại mật khẩu'}</button>
         </form>
 
         <div className="table-card employee-directory-card">
@@ -738,6 +891,10 @@ function accountLabel(account) {
   if (!account) return ''
   const linkedEmployee = account.tenNhanVien || account.nhanVien || 'Chưa gắn nhân viên'
   return `${account.ten || account.key1 || ''} - ${linkedEmployee}`
+}
+
+function passwordStateText(account) {
+  return account?.hasPassword ? 'Đã có mật khẩu' : 'Chưa có PWDMD5'
 }
 
 function isLinkedByAnotherAccount(employeeCode, userId, linkedEmployeeCodes) {

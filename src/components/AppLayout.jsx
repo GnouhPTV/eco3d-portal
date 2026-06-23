@@ -1,17 +1,24 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext.jsx'
 
 export default function AppLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const canManageUsers = isAccountCreator(user)
   const assetBase = import.meta.env.BASE_URL
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('eco3d-sidebar') === 'collapsed')
+  const [openCollapsedMenu, setOpenCollapsedMenu] = useState('')
+  const pageTitle = getPageTitle(location.pathname)
 
   useEffect(() => {
     localStorage.setItem('eco3d-sidebar', collapsed ? 'collapsed' : 'expanded')
   }, [collapsed])
+
+  useEffect(() => {
+    setOpenCollapsedMenu('')
+  }, [location.pathname, collapsed])
 
   function handleLogout() {
     logout()
@@ -21,49 +28,104 @@ export default function AppLayout() {
   return (
     <div className={collapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
       <aside className="sidebar">
-        <button
-          type="button"
-          className="sidebar-toggle"
-          onClick={() => setCollapsed((value) => !value)}
-          title={collapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-          aria-label={collapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-        >
-          <span>{collapsed ? '☰' : '‹'}</span>
-        </button>
-
         <div className="brand">
           <img className="brand-logo-full" src={`${assetBase}eco3d-logo.png`} alt="ECO3D" />
           <img className="brand-logo-icon" src={`${assetBase}eco3d-icon.png`} alt="ECO3D" />
-          <span>Cổng nội bộ</span>
+          <div className="brand-copy">
+            <strong>ECO3D</strong>
+            <span>Quản trị nội bộ</span>
+          </div>
         </div>
 
         <nav className="nav-menu">
           <NavLink to="/" end>
             <NavIcon type="dashboard" />
-            <span>Dashboard</span>
+            <span>Tổng quan</span>
           </NavLink>
-          <NavLink to="/products">
-            <NavIcon type="box" />
-            <span>Danh mục hàng hóa</span>
-          </NavLink>
-          {canManageUsers && (
-            <NavLink to="/users">
+          <details className="nav-group" open>
+            <summary
+              className={location.pathname.startsWith('/products') ? 'active' : ''}
+              onClick={(event) => handleCollapsedSummaryClick(event, 'catalog')}
+            >
+              <NavIcon type="box" />
+              <span>Danh mục</span>
+            </summary>
+            {collapsed && openCollapsedMenu === 'catalog' && (
+              <div className="collapsed-flyout">
+                <NavLink to="/products">
+                  <NavIcon type="products" />
+                  <span>Hàng hóa</span>
+                </NavLink>
+              </div>
+            )}
+            <div className="nav-submenu">
+              <NavLink to="/products">
+                <NavIcon type="products" />
+                <span>Hàng hóa</span>
+              </NavLink>
+            </div>
+          </details>
+          <details className="nav-group" open>
+            <summary
+              className={location.pathname.startsWith('/users') || location.pathname.startsWith('/change-password') ? 'active' : ''}
+              onClick={(event) => handleCollapsedSummaryClick(event, 'account')}
+            >
               <NavIcon type="users" />
-              <span>Tài khoản nhân viên</span>
-            </NavLink>
-          )}
-          <NavLink to="/change-password">
-            <NavIcon type="lock" />
-            <span>Đổi mật khẩu</span>
-          </NavLink>
+              <span>Tài khoản</span>
+            </summary>
+            {collapsed && openCollapsedMenu === 'account' && (
+              <div className="collapsed-flyout">
+                {canManageUsers && (
+                  <NavLink to="/users">
+                    <NavIcon type="users" />
+                    <span>Tài khoản nhân viên</span>
+                  </NavLink>
+                )}
+                <NavLink to="/change-password">
+                  <NavIcon type="lock" />
+                  <span>Đổi mật khẩu</span>
+                </NavLink>
+              </div>
+            )}
+            <div className="nav-submenu">
+              {canManageUsers && (
+                <NavLink to="/users">
+                  <NavIcon type="users" />
+                  <span>Tài khoản nhân viên</span>
+                </NavLink>
+              )}
+              <NavLink to="/change-password">
+                <NavIcon type="lock" />
+                <span>Đổi mật khẩu</span>
+              </NavLink>
+            </div>
+          </details>
         </nav>
+
+        <div className="sidebar-footer">
+          <div className="sidebar-user-avatar">{(user?.ten || 'U').slice(0, 1).toUpperCase()}</div>
+          <div className="sidebar-user-copy">
+            <strong>{user?.ten || 'User'}</strong>
+            <span>Đang đăng nhập</span>
+          </div>
+        </div>
       </aside>
 
       <main className="main-panel">
         <header className="topbar">
-          <div>
-            <h1>Hệ thống quản lý ECO3D</h1>
-            <p>Quản lý hàng hóa, tồn kho và dữ liệu bán hàng nội bộ</p>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            onClick={() => setCollapsed((value) => !value)}
+            title={collapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+            aria-label={collapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+          >
+            <span>{collapsed ? '☰' : '‹'}</span>
+          </button>
+          <div className="breadcrumb">
+            <span>Trang chủ</span>
+            <span>/</span>
+            <strong>{pageTitle}</strong>
           </div>
           <div className="user-box">
             <span>Xin chào, <strong>{user?.ten || 'User'}</strong></span>
@@ -74,6 +136,19 @@ export default function AppLayout() {
       </main>
     </div>
   )
+
+  function handleCollapsedSummaryClick(event, menuName) {
+    if (!collapsed) return
+    event.preventDefault()
+    setOpenCollapsedMenu((current) => (current === menuName ? '' : menuName))
+  }
+}
+
+function getPageTitle(pathname) {
+  if (pathname.startsWith('/products')) return 'Hàng hóa'
+  if (pathname.startsWith('/users')) return 'Tài khoản nhân viên'
+  if (pathname.startsWith('/change-password')) return 'Đổi mật khẩu'
+  return 'Tổng quan'
 }
 
 function isAccountCreator(user) {
@@ -96,6 +171,13 @@ function NavIcon({ type }) {
         <path d="M4 8.2 12 4l8 4.2v7.6L12 20l-8-4.2Z" />
         <path d="M4.5 8.5 12 12.4l7.5-3.9" />
         <path d="M12 12.4V20" />
+      </>
+    ),
+    products: (
+      <>
+        <path d="M5 7h14" />
+        <path d="M5 12h14" />
+        <path d="M5 17h14" />
       </>
     ),
     users: (
